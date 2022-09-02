@@ -5,6 +5,8 @@ dotenv.config();
 import { MongoClient, ObjectId } from "mongodb";
 import joi from "joi";
 import dayjs from "dayjs";
+import { stripHtml } from "string-strip-html";
+import { strict as assert } from "assert";
 
 const app = express();
 app.use(cors());
@@ -28,8 +30,9 @@ const messagesSchema = joi.object({
 });
 
 app.post("/participants", async (req, res) => {
-  const { name } = req.body;
+  const { name: userName } = req.body;
   const validation = participantsSchema.validate(req.body);
+  const name = stripHtml(userName, { trimOnlySpaces: true }).result;
 
   if (validation.error) {
     res.sendStatus(422);
@@ -73,17 +76,22 @@ app.get("/participants", async (req, res) => {
 });
 
 app.post("/messages", async (req, res) => {
-  const { to, text, type } = req.body;
+  const { to: unTo, text: unText, type: unType } = req.body;
   const validation = messagesSchema.validate(req.body);
   const { user } = req.headers;
+
+  const to = stripHtml(unTo, { trimOnlySpaces: true }).result;
+  const text = stripHtml(unText, { trimOnlySpaces: true }).result;
+  const type = stripHtml(unType, { trimOnlySpaces: true }).result;
+  const from = stripHtml(user, { trimOnlySpaces: true }).result;
 
   const participantsValid = await db
     .collection("participants")
     .findOne({ name: user });
 
-  const activeParticipants = await db
+  /* const activeParticipants = await db
     .collection("participants")
-    .findOne({ name: to });
+    .findOne({ name: to }); */
 
   if (validation.error || !participantsValid) {
     res.sendStatus(422);
@@ -91,10 +99,10 @@ app.post("/messages", async (req, res) => {
   }
   try {
     await db.collection("messages").insertOne({
-      from: user,
-      to: to,
-      text: text,
-      type: type,
+      from,
+      to,
+      text,
+      type,
       time: dayjs().format("HH:mm:ss"),
     });
     res.sendStatus(201);
@@ -127,8 +135,8 @@ app.get("/messages", async (req, res) => {
 });
 
 app.post("/status", async (req, res) => {
-  const participantsValid = await db;
-  const { user } = req.headers
+  const { user } = req.headers;
+  const participantsValid = await db
     .collection("participants")
     .findOne({ name: user });
 
@@ -197,4 +205,48 @@ app.delete("/messages/:idMessage", async (req, res) => {
   }
 });
 
+app.put("/messages/:idMessage", async (req, res) => {
+  const validation = messagesSchema.validate(req.body);
+  const { user } = req.headers;
+  const { idMessage } = req.params;
+
+  const participantsValid = await db
+    .collection("participants")
+    .findOne({ name: user });
+
+  if (validation.error || !participantsValid) {
+    res.sendStatus(422);
+    return;
+  }
+
+  const message = await db
+    .collection("messages")
+    .findOne({ _id: ObjectId(idMessage) });
+
+  if (!message) {
+    res.sendStatus(404);
+    return;
+  }
+
+  const participantMessage = await db.collection("messages").findOne({
+    from: user,
+    _id: ObjectId(idMessage),
+  });
+
+  if (!participantMessage) {
+    res.sendStatus(401);
+    return;
+  }
+  try {
+    await db
+      .collection("messages")
+      .updateOne(
+        { _id: ObjectId(idMessage) },
+        { $set: { text: req.body.text } }
+      );
+    res.sendStatus(200);
+  } catch (error) {
+    res.sendStatus(505);
+  }
+});
 app.listen(5000, () => console.log("Listening on port 5000"));
