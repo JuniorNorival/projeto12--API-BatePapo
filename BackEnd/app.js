@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 dotenv.config();
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import joi from "joi";
 import dayjs from "dayjs";
 const app = express();
@@ -123,12 +123,16 @@ app.post("/status", async (req, res) => {
 
   if (!participantsValid) {
     res.sendStatus(404);
+    return;
   }
 
   try {
     await db
       .collection("participants")
-      .update({ name: req.headers.user }, { $set: { lastStatus: Date.now() } });
+      .updateOne(
+        { name: req.headers.user },
+        { $set: { lastStatus: Date.now() } }
+      );
 
     res.sendStatus(200);
   } catch (error) {
@@ -153,5 +157,32 @@ async function removeInactive() {
   });
 }
 setInterval(removeInactive, 15000);
+
+app.delete("/messages/:idMessage", async (req, res) => {
+  const { idMessage } = req.params;
+  console.log(idMessage);
+  try {
+    const participantMessage = await db.collection("messages").findOne({
+      from: req.headers.user,
+      _id: ObjectId(idMessage),
+    });
+    const messageValid = await db.collection("messages").findOne({
+      _id: ObjectId(idMessage),
+    });
+    console.log(messageValid);
+    if (!messageValid) {
+      res.sendStatus(404);
+      return;
+    }
+    if (participantMessage) {
+      await db.collection("messages").deleteOne({ _id: ObjectId(idMessage) });
+    } else {
+      res.sendStatus(401);
+      return;
+    }
+  } catch (error) {
+    res.sendStatus(500);
+  }
+});
 
 app.listen(5000, () => console.log("Listening on port 5000"));
