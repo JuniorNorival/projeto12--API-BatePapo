@@ -20,22 +20,23 @@ mongoClient.connect().then(() => {
 });
 
 const participantsSchema = joi.object({
-  name: joi.string().required().trim(true),
+  name: joi.string().required().trim(),
 });
 
 const messagesSchema = joi.object({
-  to: joi.string().required(),
-  text: joi.string().required(),
+  to: joi.string().required().trim(),
+  text: joi.string().required().trim(),
   type: joi.string().valid("message", "private_message").required(),
 });
 
 app.post("/participants", async (req, res) => {
   const { name: userName } = req.body;
   const validation = participantsSchema.validate(req.body);
-  const name = stripHtml(userName, { trimOnlySpaces: true }).result;
+  const name = stripHtml(userName).result;
 
   if (validation.error) {
-    res.sendStatus(422);
+    const error = validation.error.details.map((erro) => erro.message);
+    res.status(422).send(error);
     return;
   }
 
@@ -80,10 +81,10 @@ app.post("/messages", async (req, res) => {
   const validation = messagesSchema.validate(req.body);
   const { user } = req.headers;
 
-  const to = stripHtml(unTo, { trimOnlySpaces: true }).result;
-  const text = stripHtml(unText, { trimOnlySpaces: true }).result;
-  const type = stripHtml(unType, { trimOnlySpaces: true }).result;
-  const from = stripHtml(user, { trimOnlySpaces: true }).result;
+  const to = stripHtml(unTo).result;
+  const text = stripHtml(unText).result;
+  const type = stripHtml(unType).result;
+  const from = stripHtml(user).result;
 
   const participantsValid = await db
     .collection("participants")
@@ -93,8 +94,13 @@ app.post("/messages", async (req, res) => {
     .collection("participants")
     .findOne({ name: to }); */
 
-  if (validation.error || !participantsValid) {
-    res.sendStatus(422);
+  if (validation.error) {
+    const error = validation.error.details.map((erro) => erro.message);
+    res.status(422).send(error);
+    return;
+  }
+  if (!participantsValid) {
+    res.status(404).send({ message: "Participante não está ativo" });
     return;
   }
   try {
@@ -214,8 +220,13 @@ app.put("/messages/:idMessage", async (req, res) => {
     .collection("participants")
     .findOne({ name: user });
 
-  if (validation.error || !participantsValid) {
-    res.sendStatus(422);
+  if (validation.error) {
+    const error = validation.error.details.map((erro) => erro.message);
+    res.status(422).send(error);
+    return;
+  }
+  if (!participantsValid) {
+    res.status(404).send({ message: "Participante não está ativo" });
     return;
   }
 
