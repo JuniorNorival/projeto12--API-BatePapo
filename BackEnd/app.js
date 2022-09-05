@@ -160,7 +160,7 @@ async function removeInactive() {
   const allUsers = await db.collection("participants").find().toArray();
 
   await allUsers.forEach((user, index) => {
-    if ((Date.now() - user.lastStatus) / 1000 >= 15) {
+    if ((Date.now() - user.lastStatus) / 1000 >= 10) {
       db.collection("participants").deleteOne({ name: user.name });
       db.collection("messages").insertOne({
         from: user.name,
